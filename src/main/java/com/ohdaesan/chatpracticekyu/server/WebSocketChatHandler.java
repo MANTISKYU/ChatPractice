@@ -1,50 +1,60 @@
 package com.ohdaesan.chatpracticekyu.server;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ohdaesan.chatpracticekyu.dto.ChatDTO;
-import com.ohdaesan.chatpracticekyu.dto.ChatRoomDTO;
-import com.ohdaesan.chatpracticekyu.service.ChatService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-@Slf4j
 @Component
-@RequiredArgsConstructor
 public class WebSocketChatHandler extends TextWebSocketHandler {
 
-    private final ObjectMapper objectMapper;
+    private static final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
 
-    private final ChatService chatService;
-
-    //
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        super.afterConnectionEstablished(session);
+        // WebSocket 연결이 완료되면 세션을 저장
+        String token = extractTokenFromSession(session);
+        Claims claims = Jwts.parser()
+                .setSigningKey("YourSecretKey")
+                .parseClaimsJws(token)
+                .getBody();
+        String username = claims.getSubject();
+
+        sessions.put(username, session);
     }
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        // 채팅방으로 보낸 메세지를꺼냄
+        // 메시지를 받으면 발신자 정보를 포함해 처리
         String payload = message.getPayload();
-        log.info("payload {}", payload);
-//
-        // 첫화면??
-        TextMessage textMessage = new TextMessage("채팅 시작합니다 삐요삐요");
+        String token = extractTokenFromSession(session);
+        Claims claims = Jwts.parser()
+                .setSigningKey("YourSecretKey")
+                .parseClaimsJws(token)
+                .getBody();
 
-        // 채팅방에 들어온사람들한테 메세지가 뿌려짐
-        session.sendMessage(textMessage);
+        String username = claims.getSubject(); // 발신자 확인
 
-
-
-        ChatDTO chatDTO = objectMapper.readValue(payload, ChatDTO.class);
-        ChatRoomDTO roomDTO = chatService.findRoomById(chatDTO.getRoomId());
-        roomDTO.handleActions(session, chatDTO, chatService);
+        // 모든 세션에 메시지 전달
+        for (WebSocketSession sess : sessions.values()) {
+            sess.sendMessage(new TextMessage(username + ": " + payload));
+        }
     }
 
+    private String extractTokenFromSession(WebSocketSession session) {
+        // WebSocketSession에서 JWT 토큰을 추출하는 메서드 (헤더나 URL에서)
+        return session.getUri().getQuery().split("token=")[1];
+    }
 
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
+        // 연결 종료 시 세션 제거
+        sessions.values().remove(session);
+    }
 }

@@ -1,34 +1,28 @@
 package com.ohdaesan.chatpracticekyu.config;
 
-import lombok.RequiredArgsConstructor;
+import com.ohdaesan.chatpracticekyu.server.WebSocketChatHandler;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.messaging.simp.config.MessageBrokerRegistry;
-import org.springframework.web.socket.WebSocketHandler;
-import org.springframework.web.socket.config.annotation.*;
+import org.springframework.web.socket.config.annotation.EnableWebSocket;
+import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
+import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
+import org.springframework.web.socket.server.support.HttpSessionHandshakeInterceptor;
 
 @Configuration
 @EnableWebSocket
-@RequiredArgsConstructor
 public class WebSockConfig implements WebSocketConfigurer {
 
-     // WebSocketHandler 에 관한 생성자 추가
-    private final WebSocketHandler webSocketHandler;
+    private final WebSocketChatHandler chatHandler;
+
+    @Autowired
+    public WebSockConfig(WebSocketChatHandler chatHandler) {
+        this.chatHandler = chatHandler;
+    }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(webSocketHandler, "/ws/chat").setAllowedOrigins("*");
-
+        registry.addHandler(chatHandler, "/ws/chat")
+                .setAllowedOrigins("*")
+                .addInterceptors(new HttpSessionHandshakeInterceptor());
     }
-
-//    @Override
-//    public void configureMessageBroker(MessageBrokerRegistry registry) {
-//        // 메시지를 구독하는 요청 url => 즉 메시지 받을 때
-//        registry.enableSimpleBroker("/sub");
-//
-//        // 메시지를 발행하는 요청 url => 즉 메시지 보낼 때
-//        registry.setApplicationDestinationPrefixes("/pub");
-//    }
-
-
-
 }
